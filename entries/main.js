@@ -5,6 +5,7 @@ const { core, event, file, global, mpv, playlist, preferences, console } = iina;
 let playbackFinished = false;
 let seekToStartOnNextFile = false;
 let endBehavior = "hold";
+let playbackMode = "auto_next";
 let commandQueue = [];
 let commandQueueActive = false;
 let lastPlaylistNavigation = 0;
@@ -113,6 +114,14 @@ function refreshDetails() {
   };
 }
 
+function setPlaybackMode(mode) {
+  playbackMode = ["none", "single", "auto_next", "playlist_loop", "shuffle"].indexOf(String(mode)) >= 0 ? String(mode) : "auto_next";
+  mpv.set("loop-file", playbackMode === "single" ? "inf" : "no");
+  mpv.set("loop-playlist", playbackMode === "playlist_loop" ? "inf" : "no");
+  mpv.set("keep-open", playbackMode === "none" ? "always" : "yes");
+  if (playbackMode === "shuffle") mpv.command("playlist-shuffle", []);
+}
+
 function currentState() {
   const position = safeRead(() => core.status.position, null);
   const duration = safeRead(() => core.status.duration, null);
@@ -156,6 +165,7 @@ function currentState() {
     loopFile: safeRead(() => mpv.getString("loop-file"), "no"),
     loopPlaylist: safeRead(() => mpv.getString("loop-playlist"), "no"),
     endBehavior,
+    playbackMode,
     filename: safeRead(() => mpv.getString("filename"), ""),
     ...details,
     timestamp: Date.now(),
@@ -282,9 +292,14 @@ function runCommand(command, args) {
       break;
     case "set_loop_file":
       mpv.set("loop-file", String(args.mode || "no"));
+      playbackMode = String(args.mode || "no") === "inf" ? "single" : "auto_next";
       break;
     case "set_loop_playlist":
       mpv.set("loop-playlist", String(args.mode || "no"));
+      playbackMode = String(args.mode || "no") === "inf" ? "playlist_loop" : "auto_next";
+      break;
+    case "set_playback_mode":
+      setPlaybackMode(args.mode);
       break;
     case "ab_loop":
       mpv.command("ab-loop", []);
@@ -336,7 +351,8 @@ function runCommand(command, args) {
       break;
     case "set_end_behavior":
       endBehavior = ["hold", "close", "loop"].indexOf(String(args.behavior)) >= 0 ? String(args.behavior) : "hold";
-      mpv.set("loop-file", endBehavior === "loop" ? "inf" : "no");
+      if (endBehavior === "loop") setPlaybackMode("single");
+      else if (playbackMode === "single") setPlaybackMode("auto_next");
       break;
     case "set_fullscreen":
       core.window.fullscreen = args.enabled === true;
@@ -425,5 +441,6 @@ const stateInterval = Number.isFinite(configuredInterval)
   : 500;
 setInterval(publishState, stateInterval);
 
+setPlaybackMode(playbackMode);
 refreshDetails();
 publishState();

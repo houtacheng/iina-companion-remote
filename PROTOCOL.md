@@ -18,6 +18,9 @@ Supported commands:
 
 - `play`, `pause`, `toggle_play_pause`, `stop`
 - `select_player` (`playerId`, handled by the global controller)
+- `controller_visibility` (`operation`: `show`, `hide`, or `toggle`)
+- `controller_mode` (`operation`: `full`, `compact`, or `toggle`)
+- `set_playback_mode` (`mode`: `none`, `single`, `auto_next`, `playlist_loop`, or `shuffle`)
 - `close_window`, `frame_step`, `frame_back_step`, `screenshot` (`mode`)
 - `seek_relative` (`seconds`, optional `exact`), `seek_absolute` (`seconds`)
 - `set_position_percent` (`percent`)

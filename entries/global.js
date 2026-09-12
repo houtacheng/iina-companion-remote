@@ -1,7 +1,9 @@
 /* global iina, setTimeout */
-const { file, global, menu, preferences, standaloneWindow, ws, console } = iina;
+const { file, global, menu, preferences, standaloneWindow, utils, ws, console } = iina;
 const clients = {}, players = {}, inbound = [], playerQueue = [], pendingSends = [];
+const pendingSystemTasks = [];
 let lastPlayerID = null, inboundActive = false, playerActive = false, listPending = false;
+let controllerVisible = false, controllerCompact = false;
 const extensions = { mp4:1,mov:1,mkv:1,avi:1,m4v:1,webm:1,mp3:1,wav:1,aac:1,flac:1,m4a:1,aiff:1,ts:1,m2ts:1,mts:1,mpg:1,mpeg:1,ogg:1,opus:1,wmv:1,wma:1,flv:1,ape:1,alac:1,"3gp":1,"3g2":1,ogv:1 };
 
 function getToken() {
@@ -22,6 +24,22 @@ function send(connection, payload) {
   } catch (error) { console.warn(String(error)); }
 }
 function broadcast(payload) { Object.keys(clients).forEach((connection) => { if (clients[connection].authenticated) send(connection, payload); }); }
+function retainSystemTask(task) {
+  if (!task) return;
+  pendingSystemTasks.push(task);
+  setTimeout(() => { const index = pendingSystemTasks.indexOf(task); if (index >= 0) pendingSystemTasks.splice(index, 1); }, 5000);
+}
+function showController() {
+  controllerVisible = true;
+  // standaloneWindow.open() does not activate IINA while another macOS app is
+  // in front. `open` activates IINA without requiring Apple Events permission.
+  try { retainSystemTask(utils.exec("/usr/bin/open", ["-b", "com.colliderli.iina"])); } catch (error) { console.warn(String(error)); }
+  standaloneWindow.open();
+  updateController();
+  // Open it again after activation so the controller, rather than a player
+  // window, becomes the frontmost IINA window.
+  setTimeout(() => { if (controllerVisible) { standaloneWindow.open(); updateController(); } }, 250);
+}
 function library() {
   const folder = String(preferences.get("mediaFolder") || "").trim().replace(/\/$/, "");
   if (!folder) return { folder:"", files:[], error:null };
@@ -56,6 +74,20 @@ function handle(connection, message) {
   else if (message.type === "get_players") send(connection, { type:"players", requestId:message.requestId || null, players:playerList() });
   else if (message.type === "get_state") send(connection, { type:"state", requestId:message.requestId || null, playerId:lastPlayerID, state:players[lastPlayerID]?.state || null });
   else if (message.type === "ping") send(connection, { type:"pong", requestId:message.requestId || null });
+  else if (message.type === "command" && message.command === "controller_visibility") {
+    const operation = String((message.args || {}).operation || "toggle");
+    const show = operation === "show" || (operation === "toggle" && !controllerVisible);
+    if (show) showController();
+    else { standaloneWindow.close(); controllerVisible = false; }
+    send(connection, { type:"command_result", requestId:message.requestId || null, ok:true, controllerVisible, controllerCompact });
+  }
+  else if (message.type === "command" && message.command === "controller_mode") {
+    const operation = String((message.args || {}).operation || "toggle");
+    controllerCompact = operation === "compact" || (operation === "toggle" && !controllerCompact);
+    standaloneWindow.setFrame(controllerCompact ? 470 : 1120, controllerCompact ? 317 : 760);
+    standaloneWindow.postMessage("set-mode", { compact:controllerCompact });
+    send(connection, { type:"command_result", requestId:message.requestId || null, ok:true, controllerVisible, controllerCompact });
+  }
   else if (message.type === "command" && message.command === "select_player") {
     const id = String((message.args || {}).playerId || "");
     if (players[id]) { lastPlayerID = id; send(connection, { type:"command_result", requestId:message.requestId || null, ok:true, playerId:id, state:players[id].state }); updateController(); }
@@ -100,14 +132,15 @@ ws.onConnectionStateUpdate((connection,state) => { if (state === "failed" || sta
 ws.onMessage((connection,raw) => { try { queueInbound(connection, JSON.parse(raw.text())); } catch (_error) {} });
 
 standaloneWindow.loadFile("controller.html");
-standaloneWindow.setProperty({ title:"IINA Remote Controller", resizable:true, fullSizeContentView:false, hideTitleBar:false });
-standaloneWindow.setFrame(1040, 700);
-standaloneWindow.onMessage("ready", updateController);
+standaloneWindow.setProperty({ title:"IINA Remote Controller", resizable:true, hudWindow:true, fullSizeContentView:false, hideTitleBar:false });
+standaloneWindow.setFrame(1120, 760);
+standaloneWindow.onMessage("ready", () => { controllerVisible = true; updateController(); });
 standaloneWindow.onMessage("refresh", updateController);
-standaloneWindow.onMessage("controller-mode", (data) => { standaloneWindow.setFrame(data.compact === true ? 720 : 1040, data.compact === true ? 300 : 700); });
+standaloneWindow.onMessage("controller-mode", (data) => { controllerCompact = data.compact === true; standaloneWindow.setFrame(controllerCompact ? 470 : 1120, controllerCompact ? 317 : 760); });
+standaloneWindow.onMessage("controller-closed", () => { controllerVisible = false; });
 standaloneWindow.onMessage("select-player", (data) => { const id = String(data.playerId || ""); if (players[id]) lastPlayerID = id; updateController(); });
 standaloneWindow.onMessage("command", (data) => forward({ command:data.command, args:{ ...(data.args || {}), playerId:data.playerId || lastPlayerID }, requestId:`controller-${Date.now()}` }, null));
-menu.addItem(menu.item("開啟 Remote Controller…", () => { standaloneWindow.open(); updateController(); }, { keyBinding:"Meta+Shift+R" }));
+menu.addItem(menu.item("開啟 Remote Controller…", showController, { keyBinding:"Meta+Shift+R" }));
 
 const configuredPort = Number(preferences.get("port"));
 getToken(); ws.createServer({ port:Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort < 65536 ? configuredPort : 19190 }); ws.startServer();

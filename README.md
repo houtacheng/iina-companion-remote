@@ -28,6 +28,12 @@ Version 0.5 adds an independent Remote Controller window (IINA menu → Open Rem
 Command-Shift-R), detailed playlist/chapter/track state, and serialized/coalesced messaging for safer
 multi-window operation. Playlist navigation now uses IINA's Playlist API with bounds and repeat-press guards.
 
+Version 0.5.1 keeps previous/next controls in compact mode and lets Companion show/hide the Remote
+Controller or switch it between full and compact layouts.
+
+Version 0.5.3 activates IINA before showing the Remote Controller, allowing Companion to bring the
+controller to the foreground while another macOS application is active.
+
 ## Browser smoke test
 
 Open `tools/test-client.html` in a browser on the IINA Mac, enter the pairing token, connect, and try the buttons. Some browsers expose IINA's UTF-8 response frames as binary blobs; the future Companion module will handle both binary and text frames.
