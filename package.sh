@@ -3,8 +3,8 @@ set -eu
 
 plugin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 parent_dir=$(dirname -- "$plugin_dir")
-output="$parent_dir/iina-companion-remote-0.4.1.iinaplgz"
-temporary_zip="$parent_dir/iina-companion-remote-0.4.1.zip"
+output="$parent_dir/iina-companion-remote-0.5.0.iinaplgz"
+temporary_zip="$parent_dir/iina-companion-remote-0.5.0.zip"
 
 rm -f "$output" "$temporary_zip"
 if [ -x /Applications/IINA.app/Contents/MacOS/iina-plugin ]; then
@@ -15,7 +15,7 @@ if [ -x /Applications/IINA.app/Contents/MacOS/iina-plugin ]; then
 else
   (
     cd "$plugin_dir"
-    zip -qr "$temporary_zip" Info.json entries preferences.html PROTOCOL.md README.md tools
+    zip -qr "$temporary_zip" Info.json entries controller.html preferences.html PROTOCOL.md README.md tools
   )
   mv "$temporary_zip" "$output"
 fi

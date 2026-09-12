@@ -1,4 +1,4 @@
-# Companion Remote protocol v1
+# Companion Remote protocol v3
 
 The server listens on `ws://<iina-mac>:19190` by default. Frames sent by the IINA API may be exposed to clients as binary UTF-8 data; clients must accept both text and binary WebSocket frames.
 
@@ -17,6 +17,7 @@ Commands use this envelope:
 Supported commands:
 
 - `play`, `pause`, `toggle_play_pause`, `stop`
+- `select_player` (`playerId`, handled by the global controller)
 - `close_window`, `frame_step`, `frame_back_step`, `screenshot` (`mode`)
 - `seek_relative` (`seconds`, optional `exact`), `seek_absolute` (`seconds`)
 - `set_position_percent` (`percent`)
@@ -42,4 +43,6 @@ After authentication, the server sends a `library` message containing media file
 
 The server pushes `state` messages. State includes integer `remainingSeconds` and `playbackFinished`. At natural EOF, the plugin publishes `remainingSeconds: 0` and `playbackFinished: true` before optionally closing the player window.
 
-This version is intended for one open IINA playback window. Each player owns its WebSocket server, so a second window cannot use the same port. Explicit multi-player selection will be added in a later protocol version.
+The global server manages multiple IINA playback windows. `state`, `command_result`, and `players`
+messages include player identity. Add `playerId` to command args to target a specific window; otherwise
+the currently selected/most recently active player is used.

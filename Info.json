@@ -1,7 +1,7 @@
 {
   "name": "Companion Remote",
   "identifier": "tw.kongshan.iina-companion-remote",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Control IINA from Bitfocus Companion over an authenticated WebSocket connection.",
   "author": {
     "name": "Kongshan"

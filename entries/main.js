@@ -1,10 +1,14 @@
-/* global iina, setInterval */
+/* global iina, setInterval, setTimeout */
 
 const { core, event, file, global, mpv, playlist, preferences, console } = iina;
 
 let playbackFinished = false;
 let seekToStartOnNextFile = false;
 let endBehavior = "hold";
+let commandQueue = [];
+let commandQueueActive = false;
+let lastPlaylistNavigation = 0;
+let details = { audioTracks: [], subtitleTracks: [], playlistItems: [], chapters: [], screens: [], videoInfo: "" };
 
 function randomToken() {
   let value = "";
@@ -94,6 +98,21 @@ function safeRead(read, fallback) {
   }
 }
 
+function refreshDetails() {
+  const audioTracks = safeRead(() => core.audio.tracks, []).map((track) => ({ id: track.id, label: track.formattedTitle || track.title || track.lang || `Audio ${track.id}`, language: track.lang || "", codec: track.codec || "" }));
+  const subtitleTracks = safeRead(() => core.subtitle.tracks, []).map((track) => ({ id: track.id, label: track.formattedTitle || track.title || track.lang || `Subtitle ${track.id}`, language: track.lang || "", codec: track.codec || "" }));
+  const videoTracks = safeRead(() => core.video.tracks, []);
+  const video = videoTracks.find((track) => track.id === safeRead(() => core.video.id, null)) || videoTracks[0] || {};
+  details = {
+    audioTracks,
+    subtitleTracks,
+    playlistItems: safeRead(() => playlist.list(), []).map((item, index) => ({ id: index, label: item.title || String(item.filename || "").split("/").pop() || `項目 ${index + 1}`, filename: item.filename || "", isPlaying: item.isPlaying === true })),
+    chapters: safeRead(() => core.getChapters(), []).map((item, index) => ({ id: index, title: item.title || `章節 ${index + 1}`, time: item.start || 0 })),
+    screens: safeRead(() => core.window.screens, []).map((screen, index) => ({ id: index + 1, label: screen.name || `螢幕 ${index + 1}`, frame: screen.frame })),
+    videoInfo: [video.demuxW && video.demuxH ? `${video.demuxW}×${video.demuxH}` : "", video.demuxFPS ? `${Number(video.demuxFPS).toFixed(2)} fps` : "", video.codec || ""].filter(Boolean).join(" · "),
+  };
+}
+
 function currentState() {
   const position = safeRead(() => core.status.position, null);
   const duration = safeRead(() => core.status.duration, null);
@@ -136,6 +155,9 @@ function currentState() {
     subtitleVisible: safeRead(() => mpv.getFlag("sub-visibility"), true),
     loopFile: safeRead(() => mpv.getString("loop-file"), "no"),
     loopPlaylist: safeRead(() => mpv.getString("loop-playlist"), "no"),
+    endBehavior,
+    filename: safeRead(() => mpv.getString("filename"), ""),
+    ...details,
     timestamp: Date.now(),
   };
 }
@@ -231,10 +253,14 @@ function runCommand(command, args) {
       core.setSpeed(Math.max(0.01, Math.min(100, finiteNumber(args.speed, "speed"))));
       break;
     case "playlist_next":
-      mpv.command("playlist-next", ["weak"]);
+      if (Date.now() - lastPlaylistNavigation < 300) break;
+      lastPlaylistNavigation = Date.now();
+      if (safeRead(() => mpv.getNumber("playlist-count"), 0) > 0 && safeRead(() => mpv.getNumber("playlist-pos"), -1) < safeRead(() => mpv.getNumber("playlist-count"), 0) - 1) playlist.playNext();
       break;
     case "playlist_previous":
-      mpv.command("playlist-prev", ["weak"]);
+      if (Date.now() - lastPlaylistNavigation < 300) break;
+      lastPlaylistNavigation = Date.now();
+      if (safeRead(() => mpv.getNumber("playlist-count"), 0) > 0 && safeRead(() => mpv.getNumber("playlist-pos"), -1) > 0) playlist.playPrevious();
       break;
     case "playlist_play":
       playlist.play(Math.max(0, Math.trunc(finiteNumber(args.index, "index")) - 1));
@@ -339,29 +365,26 @@ function runCommand(command, args) {
 function handleCommand(message) {
   try {
     runCommand(message.command, message.args || {});
-    global.postMessage("player-result", {
-      type: "command_result",
-      requestId: message.requestId || null,
-      ok: true,
-      state: currentState(),
-    });
+    setTimeout(() => global.postMessage("player-result", { type: "command_result", requestId: message.requestId || null, ok: true, state: currentState() }), 20);
   } catch (error) {
     console.warn(`Companion Remote command failed: ${error}`);
-    global.postMessage("player-result", {
-      type: "command_result",
-      requestId: message.requestId || null,
-      ok: false,
-      error: String(error && error.message ? error.message : error),
-      state: currentState(),
-    });
+    setTimeout(() => global.postMessage("player-result", { type: "command_result", requestId: message.requestId || null, ok: false, error: String(error && error.message ? error.message : error), state: currentState() }), 20);
   }
 }
 
-global.onMessage("player-command", (message) => handleCommand(message));
+function drainCommands() {
+  commandQueueActive = false;
+  const message = commandQueue.shift();
+  if (message) handleCommand(message);
+  if (commandQueue.length) { commandQueueActive = true; setTimeout(drainCommands, 25); }
+}
+global.onMessage("player-command", (message) => {
+  commandQueue.push(message);
+  if (!commandQueueActive) { commandQueueActive = true; setTimeout(drainCommands, 0); }
+});
 event.on("iina.window-did-close", () => global.postMessage("player-closed", {}));
 
 [
-  "iina.file-loaded",
   "mpv.pause.changed",
   "mpv.volume.changed",
   "mpv.mute.changed",
@@ -383,6 +406,10 @@ event.on("iina.file-started", () => {
   publishState();
 });
 
+event.on("iina.file-loaded", () => { refreshDetails(); publishState(); });
+event.on("mpv.track-list.changed", () => { refreshDetails(); publishState(); });
+event.on("mpv.playlist-count.changed", () => { refreshDetails(); publishState(); });
+
 event.on("mpv.eof-reached.changed", () => {
   if (!safeRead(() => mpv.getFlag("eof-reached"), false)) return;
   playbackFinished = true;
@@ -398,4 +425,5 @@ const stateInterval = Number.isFinite(configuredInterval)
   : 500;
 setInterval(publishState, stateInterval);
 
+refreshDetails();
 publishState();

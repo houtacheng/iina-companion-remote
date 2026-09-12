@@ -24,6 +24,10 @@ Version 0.4 adds a global controller for multiple IINA player windows. Companion
 player window, choose its target display, start from the beginning, and select what happens at the end:
 keep the window, close it, or loop the file.
 
+Version 0.5 adds an independent Remote Controller window (IINA menu → Open Remote Controller, or
+Command-Shift-R), detailed playlist/chapter/track state, and serialized/coalesced messaging for safer
+multi-window operation. Playlist navigation now uses IINA's Playlist API with bounds and repeat-press guards.
+
 ## Browser smoke test
 
 Open `tools/test-client.html` in a browser on the IINA Mac, enter the pairing token, connect, and try the buttons. Some browsers expose IINA's UTF-8 response frames as binary blobs; the future Companion module will handle both binary and text frames.
