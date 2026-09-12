@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { padding: 10px 12px; }
+      label { display: block; margin-bottom: 4px; }
+      input[type="text"] { width: 100%; box-sizing: border-box; }
+      input[type="number"] { width: 100px; }
+      code { user-select: all; }
+    </style>
+  </head>
+  <body>
+    <div class="pref-section">
+      <label for="port">WebSocket 連接埠</label>
+      <input id="port" type="number" min="1024" max="65535" data-type="int" data-pref-key="port" />
+      <p class="small secondary pref-help">預設為 19190。變更後請重新啟動 IINA。</p>
+    </div>
+    <div class="pref-section">
+      <label for="token">配對金鑰</label>
+      <input id="token" type="text" autocomplete="off" data-pref-key="token" />
+      <p class="small secondary pref-help">首次啟動會自動產生。請將此值填入 Companion 模組。</p>
+    </div>
+    <div class="pref-section">
+      <label for="interval">狀態更新間隔（毫秒）</label>
+      <input id="interval" type="number" min="250" max="5000" step="50" data-type="int" data-pref-key="stateInterval" />
+    </div>
+    <div class="pref-section">
+      <label for="media-folder">媒體資料夾</label>
+      <input id="media-folder" type="text" data-pref-key="mediaFolder" placeholder="例如 /Users/yourname/Movies" />
+      <p class="small secondary pref-help">Companion 會將此資料夾中的媒體顯示為可選清單。</p>
+      <label>
+        <input type="checkbox" data-type="bool" data-pref-key="scanSubfolders" />
+        包含子資料夾
+      </label>
+    </div>
+    <div class="pref-section">
+      <label>
+        <input type="checkbox" data-type="bool" data-pref-key="autoCloseOnEnd" />
+        播放完畢後關閉 IINA 播放視窗
+      </label>
+      <p class="small secondary pref-help">關閉前會先將剩餘秒數 0 與播放完成狀態傳送至 Companion。</p>
+    </div>
+    <p class="small secondary">
+      連線網址：<code>ws://這台 Mac 的 IP:19190</code><br />
+      目前僅提供 ws://，請只在可信任的區域網路或 VPN 中使用。
+    </p>
+  </body>
+</html>

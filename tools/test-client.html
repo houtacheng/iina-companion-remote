@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <meta charset="utf-8" />
+  <title>IINA Companion Remote 測試器</title>
+  <style>
+    body { max-width: 760px; margin: 30px auto; font: 15px system-ui; }
+    input { width: 100%; box-sizing: border-box; margin: 4px 0 12px; }
+    button { margin: 3px; padding: 8px 12px; }
+    pre { min-height: 180px; background: #111; color: #ddd; padding: 12px; overflow: auto; }
+  </style>
+  <h1>IINA Companion Remote 測試器</h1>
+  <label>主機位址<input id="host" value="127.0.0.1" placeholder="例如 192.168.1.50 或 iina-mac.local" /></label>
+  <label>連接埠<input id="port" type="number" min="1" max="65535" value="19190" /></label>
+  <label>配對金鑰<input id="token" type="password" /></label>
+  <button id="connect">連線</button>
+  <button data-command="toggle_play_pause">播放／暫停</button>
+  <button data-command="seek_relative" data-args='{"seconds":-10}'>後退 10 秒</button>
+  <button data-command="seek_relative" data-args='{"seconds":10}'>前進 10 秒</button>
+  <button data-command="toggle_mute">靜音</button>
+  <button data-command="toggle_fullscreen">全螢幕</button>
+  <p id="status"><strong>尚未連線</strong></p>
+  <p id="playback"></p>
+  <pre id="log"></pre>
+  <script>
+    let socket;
+    let authenticated = false;
+    const status = (value) => {
+      document.getElementById("status").innerHTML = `<strong>${value}</strong>`;
+    };
+    const log = (value) => {
+      const node = document.getElementById("log");
+      node.textContent = `${value}\n${node.textContent}`.slice(0, 12000);
+    };
+    function websocketUrl() {
+      let host = document.getElementById("host").value.trim();
+      const port = Number(document.getElementById("port").value);
+      host = host.replace(/^wss?:\/\//i, "").replace(/\/.*$/, "");
+      if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1);
+      if (!host) throw new Error("請輸入主機位址");
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("連接埠不正確");
+      const formattedHost = host.includes(":") ? `[${host}]` : host;
+      return `ws://${formattedHost}:${port}`;
+    }
+    function connect() {
+      if (socket) socket.close();
+      authenticated = false;
+      status("正在連線…");
+      let url;
+      try {
+        url = websocketUrl();
+      } catch (error) {
+        status(`❌ ${error.message}`);
+        return;
+      }
+      log(`Connecting to ${url}`);
+      socket = new WebSocket(url);
+      socket.onopen = () => {
+        status("WebSocket 已連線，正在驗證…");
+        log("WebSocket connected");
+        socket.send(JSON.stringify({type: "auth", token: document.getElementById("token").value, requestId: "auth-1"}));
+      };
+      socket.onmessage = async (event) => {
+        const text = event.data instanceof Blob
+          ? await event.data.text()
+          : event.data instanceof ArrayBuffer
+            ? new TextDecoder().decode(event.data)
+            : String(event.data);
+        try {
+          const message = JSON.parse(text);
+          if (message.type === "auth_result" && message.ok) {
+            authenticated = true;
+            status("✅ 已驗證，可以控制 IINA");
+          } else if (message.type === "command_result") {
+            status(message.ok ? "✅ 指令執行成功" : `❌ 指令失敗：${message.error}`);
+          } else if (message.type === "error") {
+            status(`❌ ${(message.error && message.error.message) || "錯誤"}`);
+          }
+          if (message.type === "state" || message.type === "auth_result") {
+            const state = message.state;
+            if (state) {
+              document.getElementById("playback").textContent =
+                `播放狀態：${state.playback}｜${Math.round(state.position || 0)} / ${Math.round(state.duration || 0)} 秒｜${state.title || ""}`;
+            }
+          } else {
+            log(text);
+          }
+        } catch (_error) {}
+      };
+      socket.onerror = () => { status("❌ 連線錯誤"); log("Connection error"); };
+      socket.onclose = () => { authenticated = false; status("連線已中斷"); log("Disconnected"); };
+    }
+    function sendCommand(name, args = {}) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return log("Not connected");
+      if (!authenticated) return log("Not authenticated");
+      status(`⏳ 指令已送出：${name}`);
+      log(`Sending command: ${name}`);
+      socket.send(JSON.stringify({type: "command", command: name, args, requestId: `${Date.now()}`}));
+    }
+
+    document.getElementById("connect").addEventListener("click", connect);
+    document.querySelectorAll("button[data-command]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const args = button.dataset.args ? JSON.parse(button.dataset.args) : {};
+        sendCommand(button.dataset.command, args);
+      });
+    });
+  </script>
+</html>

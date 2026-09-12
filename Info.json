@@ -1,0 +1,22 @@
+{
+  "name": "Companion Remote",
+  "identifier": "tw.kongshan.iina-companion-remote",
+  "version": "0.4.1",
+  "description": "Control IINA from Bitfocus Companion over an authenticated WebSocket connection.",
+  "author": {
+    "name": "Kongshan"
+  },
+  "entry": "entries/main.js",
+  "globalEntry": "entries/global.js",
+  "permissions": ["file-system", "show-osd"],
+  "preferencesPage": "preferences.html",
+  "preferenceDefaults": {
+    "port": 19190,
+    "token": "",
+    "stateInterval": 500,
+    "showConnectionOSD": true,
+    "mediaFolder": "",
+    "scanSubfolders": true,
+    "autoCloseOnEnd": false
+  }
+}
