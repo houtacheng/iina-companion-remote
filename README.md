@@ -2,6 +2,10 @@
 
 An IINA plugin that exposes authenticated playback control and live state over WebSocket, intended for a Bitfocus Companion connection module.
 
+The Companion side is [companion-module-iina-remote](https://github.com/houtacheng/companion-module-iina-remote),
+and both are installed together from
+https://houtacheng.github.io/companion-module-iina-remote/
+
 ## Install
 
 1. Use IINA 1.4.4 or newer on macOS 10.15 or newer.
